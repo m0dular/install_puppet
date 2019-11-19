@@ -1,0 +1,6 @@
+{
+  "puppet_task_version": 1,
+  "supports_noop": false,
+  "description": "Run the Puppet agent until there are no changes",
+  "files": ["deploy_pe/files/common.sh"], "input_method": "environment"
+}
