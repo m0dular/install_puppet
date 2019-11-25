@@ -1,0 +1,9 @@
+<%- | String $hostname | -%>
+{
+  "puppetdb": {
+    "server_urls": "https://<%= $hostname %>:8081",
+    "cacert": "/etc/puppetlabs/puppet/ssl/certs/ca.pem",
+    "cert": "/etc/puppetlabs/puppet/ssl/certs/<%= $hostname %>.pem",
+    "key": "/etc/puppetlabs/puppet/ssl/private_keys/<%= $hostname %>.pem"
+  }
+}
