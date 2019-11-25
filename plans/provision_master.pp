@@ -4,7 +4,8 @@ plan install_puppet::provision_master(
 ) {
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg'
 
-  $master_facts = run_task('facts', $master)
+  # Get the facts from facts::bash that we need to build urls for installing repos and packages
+  $master_facts = run_task('facts::bash', $master)
   $os_family = $master_facts.first.value['os']['family']
   $master_name = $master_facts.first.value['os']['name']
   $major_version = $master_facts.first.value['os']['release']['major']
@@ -45,28 +46,33 @@ plan install_puppet::provision_master(
     'repo_tasks::install_repo', $master, $os_family, repo_url => $repo_url, name => 'puppet'
   )
 
+  # puppetserver and puppet-agent need to be installed in any scenario
   $package_out = ['puppetserver', 'puppet-agent'].map |$p| {
     $out = run_task('package', $master, action => 'install', name => $p).first
     $tmp = { $p => $out.value }
     $tmp
   }
 
-  run_task('puppet_conf', $master, action => set, section => agent, setting => server, value => $master)
-  run_task('service', $master, action => 'start', name => 'puppetserver').first
+  # Use apply_prep to get the id of the user and fqdn
+  $master.apply_prep
 
   if $install_puppetdb {
     $services = ['puppetserver', 'puppetdb', 'puppet']
+    run_task('service', $master, action => 'start', name => 'puppetserver').first
 
+    # Installing these modules and applying these two classes give us a monolithic PuppetDB
     run_command('/opt/puppetlabs/bin/puppet module install puppetlabs-puppetdb', $master, _run_as                    => 'root')
 
     run_command('/opt/puppetlabs/bin/puppet apply -e "class{ \'puppetdb\':}"', $master, _run_as                             => 'root')
     run_command('/opt/puppetlabs/bin/puppet apply -e "class{ \'puppetdb::master::config\':}"', $master, _run_as                             => 'root')
 
-  run_task('puppet_conf', $master, action => set, section => master, setting => reports, value => 'puppetdb')
-  run_task('puppet_conf', $master, action => set, section => agent, setting => report, value => 'true')
-    $master.apply_prep
+    # Configure the master to store reports in PuppetDB and to submit them in its own agent runs
+    run_task('puppet_conf', $master, action => set, section => master, setting => reports, value => 'puppetdb')
+    run_task('puppet_conf', $master, action => set, section => agent, setting => report, value => 'true')
+
+    # Populate puppetdb.conf with the auth needed to use 'puppet query'
     apply($master) {
-      $user = "${facts['identity']['user']}"
+      $user = "${facts['id']}"
       case $user {
         'root': { $home = '/root' }
         default: { $home = "/home/$user" }
@@ -80,9 +86,13 @@ plan install_puppet::provision_master(
 
       file {"$home/.puppetlabs/client-tools/puppetdb.conf":
         ensure  => present,
-        content => epp('install_puppet/puppetdb.pp.epp', { 'hostname' => $master } ),
+        content => epp('install_puppet/puppetdb.pp.epp', { 'hostname' => "${facts['fqdn']}" } ),
       }
     }
+
+    # fqdn may be different if we're running on the localhost transport
+    $fqdn = run_task('facts', $master).first['networking']['fqdn']
+    run_task('puppet_conf', $master, action => set, section => agent, setting => server, value => "$fqdn")
 
     run_task('run_agent::run_agent', $master)
     run_command('/opt/puppetlabs/puppet/bin/gem install --bindir /opt/puppetlabs/bin puppetdb_cli', $master, _run_as => 'root')
@@ -100,5 +110,6 @@ plan install_puppet::provision_master(
     $tmp
   }
 
+  # Summarize the output of package and service tasks by combining the hashes
   return deep_merge( { 'packages' => $package_out }, { 'services' => $service_out } )
 }
