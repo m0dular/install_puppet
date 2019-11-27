@@ -1,6 +1,6 @@
 plan install_puppet::provision_master(
   TargetSpec $master,
-  Optional[String] $install_puppetdb = undef,
+  Optional[Boolean] $install_puppetdb = undef,
 ) {
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg'
 
@@ -39,7 +39,7 @@ plan install_puppet::provision_master(
   }
 
   $gpg_result = run_task(
-    'repo_tasks::install_gpg_key', $master, name => $os_family, gpg_url => $gpg_url
+    'repo_tasks::install_gpg_key', $master, gpg_url => $gpg_url
   )
 
   $repo_result = run_task(
