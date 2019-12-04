@@ -1,6 +1,6 @@
 # install_puppet
 
-Super WIP set of Bolt tasks and plans to set up a FOSS Puppet master and agents
+WIP set of Bolt tasks and plans to set up FOSS Puppet master, compilers, and agents
 
 ## Setup
 
@@ -43,4 +43,14 @@ PARAMETERS:
 - master: TargetSpec
 - targets: TargetSpec
 - gpg_url: Any
+```
+
+```
+bolt plan run install_puppet::provision_compiler master=<value> compiler=<value> [ssldir=<value>]
+
+PARAMETERS:
+- master: TargetSpec
+- compiler: TargetSpec
+- ssldir: Any
+    Default: '/etc/puppetlabs/puppet/ssl'
 ```
