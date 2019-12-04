@@ -42,9 +42,14 @@ plan install_puppet::provision_master(
     'repo_tasks::install_gpg_key', $master, gpg_url => $gpg_url
   )
 
-  $repo_result = run_task(
-    'repo_tasks::install_repo', $master, $os_family, repo_url => $repo_url, name => 'puppet'
-  )
+  # TODO: check here in the plan or in the install task?
+  # probably the task
+  #$repo_check = run_task('repo_tasks::query_repo', $master, name => 'puppet').first
+  #if empty($repo_check['repos']) {
+    $repo_result = run_task(
+      'repo_tasks::install_repo', $master, $os_family, repo_url => $repo_url, name => 'puppet'
+    )
+  #}
 
   # puppetserver and puppet-agent need to be installed in any scenario
   $package_out = ['puppetserver', 'puppet-agent'].map |$p| {
@@ -56,11 +61,19 @@ plan install_puppet::provision_master(
   # Use apply_prep to get the id of the user and fqdn
   $master.apply_prep
 
+  # fqdn may be different if we're running on the localhost transport
+  $master_fqdn = run_task('facts', $master).first['networking']['fqdn']
+  run_task(
+    'puppet_conf', $master, action => set, section => agent, setting => server, value => "$master_fqdn"
+  )
+
   if $install_puppetdb {
     $services = ['puppetserver', 'puppetdb', 'puppet']
-    run_task('service', $master, action => 'start', name => 'puppetserver').first
 
-    # Installing these modules and applying these two classes give us a monolithic PuppetDB
+    # We have to start puppetserver before applying puppetdb classes
+    run_task('service::linux', $master, action => 'start', name => 'puppetserver')
+
+    # Installing this module and applying these two classes gives us a monolithic PuppetDB
     run_command('/opt/puppetlabs/bin/puppet module install puppetlabs-puppetdb', $master, _run_as                    => 'root')
 
     run_command('/opt/puppetlabs/bin/puppet apply -e "class{ \'puppetdb\':}"', $master, _run_as                             => 'root')
@@ -90,19 +103,17 @@ plan install_puppet::provision_master(
       }
     }
 
-    # fqdn may be different if we're running on the localhost transport
-    $fqdn = run_task('facts', $master).first['networking']['fqdn']
-    run_task('puppet_conf', $master, action => set, section => agent, setting => server, value => "$fqdn")
-
-    run_task('run_agent::run_agent', $master)
     run_command('/opt/puppetlabs/puppet/bin/gem install --bindir /opt/puppetlabs/bin puppetdb_cli', $master, _run_as => 'root')
 
-    # Kick puppetserver to pick up the report changes in puppet.conf
-    run_task('service::linux', $master, action => 'restart', name => 'puppetserver')
   }
   else {
     $services = ['puppetserver', 'puppet']
   }
+
+  $services.each |$s| {
+    run_task('service::linux', $master, action => 'start', name => $s)
+  }
+  run_task('run_agent::run_agent', $master)
 
   $service_out = $services.map |$s| {
     $out = run_task('service::linux', $master, action => 'status', name => $s).first

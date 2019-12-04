@@ -1,9 +1,10 @@
 plan install_puppet::provision_agent(
   TargetSpec $master,
   TargetSpec $targets,
+  # Same key regardless of platform
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg',
 ) {
-  # TODO: agent version, error checking, comments on how tf this works
+  # TODO: agent version, error checking, comments on how tf this works, result aggregation
   $gpg_out = run_task('repo_tasks::install_gpg_key', $targets, gpg_url => $gpg_url)
 
   $foo = get_targets($targets).map |$n| {
@@ -22,19 +23,14 @@ plan install_puppet::provision_agent(
       'redhat', 'sles', 'suse', 'fedora': {
         case $node_name {
           'fedora': {
-            #TODO
-            $extra_args = '-f -g -n puppet'
-            $repo_url = 'http://yum.puppetlabs.com/puppet/sles/$releasever_major/$basearch/'
-            $install_name = 'fedora'
+            $repo_url = "http://yum.puppetlabs.com/puppet-release-fedora-${major_version}.noarch.rpm"
           }
           'sles', 'suse': {
             $extra_args = '-f -g -n puppet'
             $repo_url = 'http://yum.puppetlabs.com/puppet/sles/$releasever_major/$basearch/'
-            $install_name = 'sles'
           }
           default: {
-            $install_name = 'el'
-            $repo_url = "http://yum.puppetlabs.com/puppet/puppet-release-${install_name}-${major_version}.noarch.rpm"
+            $repo_url = "http://yum.puppetlabs.com/puppet/puppet-release-el-${major_version}.noarch.rpm"
           }
         }
       }
@@ -51,6 +47,7 @@ plan install_puppet::provision_agent(
   $platforms.each |$k,$v| {
     values($v).unique.each |$val| {
       $target_group = $vals.filter |$k,$v| { $v == $val }
+      #TODO: check if repo exists
       run_task('repo_tasks::install_repo', $target_group.keys,
         $k, repo_url => $val, name => 'puppet', _catch_errors => true)
     }
