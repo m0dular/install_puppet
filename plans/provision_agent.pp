@@ -38,13 +38,26 @@ plan install_puppet::provision_agent(
       }
       default: { warning("Unsupported platform ${os_family}") }
     }
+    # Creates hashes of { platform => repo url } pairs
     $tmp = { $os_family => { $n.name => $repo_url } }
     $tmp
   }
 
+  # Unpack and recursively merge together the { platform => repo url } hashes
+  # Because the values are hashes, they will be merged together to form hashes like:
+  #    { RedHat =>
+  #      { fqdn_1 => url_1,
+  #        fqnd_2 => url_1
+  #      }
+  #    }
   $platforms = deep_merge(**$foo, {})
+
+  # Then create a hash consisting of { fqnd => repo_url } pairs
   $vals = $platforms.values.reduce({}) |$memo, $value| { $memo + $value }
 
+  # Iterate over each unique repo url, which is contained in the value of the $platforms hash
+  # Create hashes consisting of identical repo_urls by comparing their values to the set of unique repo urls
+  # This allows us to run the install_repo task concurrently on nodes that share the same url
   $platforms.each |$k,$v| {
     values($v).unique.each |$val| {
       $target_group = $vals.filter |$k,$v| { $v == $val }
@@ -53,9 +66,12 @@ plan install_puppet::provision_agent(
         $k, repo_url => $val, name => 'puppet', _catch_errors => true)
     }
   }
+  # Run the following tasks concurrently by using the fqdns from $vals.keys
   run_task('package', $vals.keys, action => 'install', name => 'puppet-agent')
 
   run_task('puppet_conf', $vals.keys, action => set, section => agent, setting => server, value => $master_fqdn)
+
+  # Get the fqdns of agent from their puppet.conf and turn it into a comma separated string
   $agent_conf = run_task('puppet_conf', $vals.keys, action => get, section => agent, setting => certname)
   $agent_fqdns = $agent_conf.map |$a| { $a.value['status'] }.join(',')
 
