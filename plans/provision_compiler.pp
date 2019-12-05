@@ -3,6 +3,9 @@ plan install_puppet::provision_compiler(
   TargetSpec $compiler,
   $ssldir = '/etc/puppetlabs/puppet/ssl',
 ) {
+  $master.apply_prep
+  $master_fqdn = run_task('facts', $master).first['networking']['fqdn']
+
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg'
 
   # Get the facts from facts::bash that we need to build urls for installing repos and packages
@@ -60,10 +63,10 @@ plan install_puppet::provision_compiler(
   # fqdn may be different if we're running on the localhost transport
   $compiler_fqdn = run_task('facts', $compiler).first['networking']['fqdn']
   run_task(
-    'puppet_conf', $compiler, action => set, section => main, setting => server, value => "$master"
+    'puppet_conf', $compiler, action => set, section => main, setting => server, value => "$master_fqdn"
   )
   run_task(
-    'puppet_conf', $compiler, action => set, section => main, setting => ca_server, value => "$master"
+    'puppet_conf', $compiler, action => set, section => main, setting => ca_server, value => "$master_fqdn"
   )
   run_task(
     'puppet_conf', $compiler, action => set, section => main, setting => cacrl, value => "$ssldir/crl.pem"
@@ -83,7 +86,7 @@ plan install_puppet::provision_compiler(
   }
 
   run_task('run_agent::run_agent', $compiler, retries => 1, _catch_errors => true)
-  run_task('sign_cert::sign_cert', $master, agent_certnames => $compiler)
+  run_task('sign_cert::sign_cert', $master, agent_certnames => $compiler_fqdn)
   run_task('run_agent::run_agent', $compiler, retries => 1)
 
   $services = ['puppetserver', 'puppet']

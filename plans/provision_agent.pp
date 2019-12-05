@@ -4,6 +4,8 @@ plan install_puppet::provision_agent(
   # Same key regardless of platform
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg',
 ) {
+  $master.apply_prep
+  $master_fqdn = run_task('facts', $master).first['networking']['fqdn']
   # TODO: agent version, error checking, comments on how tf this works, result aggregation
   $gpg_out = run_task('repo_tasks::install_gpg_key', $targets, gpg_url => $gpg_url)
 
@@ -40,7 +42,6 @@ plan install_puppet::provision_agent(
     $tmp
   }
 
-
   $platforms = deep_merge(**$foo, {})
   $vals = $platforms.values.reduce({}) |$memo, $value| { $memo + $value }
 
@@ -54,8 +55,11 @@ plan install_puppet::provision_agent(
   }
   run_task('package', $vals.keys, action => 'install', name => 'puppet-agent')
 
-  run_task('puppet_conf', $vals.keys, action => set, section => agent, setting => server, value => $master)
+  run_task('puppet_conf', $vals.keys, action => set, section => agent, setting => server, value => $master_fqdn)
+  $agent_conf = run_task('puppet_conf', $vals.keys, action => get, section => agent, setting => certname)
+  $agent_fqdns = $agent_conf.map |$a| { $a.value['status'] }.join(',')
+
   run_task('run_agent::run_agent', $vals.keys, retries => 1, _catch_errors => true)
-  run_task('sign_cert::sign_cert', $master, agent_certnames => $targets, _catch_errors => true)
+  run_task('sign_cert::sign_cert', $master, agent_certnames => $agent_fqdns, _catch_errors => true)
   run_task('run_agent::run_agent', $vals.keys)
 }
