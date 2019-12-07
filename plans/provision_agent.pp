@@ -3,13 +3,17 @@ plan install_puppet::provision_agent(
   TargetSpec $targets,
   # Same key regardless of platform
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg',
+  # The major puppet version to install.  An empty string defaults to 'puppet', which is latest
+  $puppet_version = '',
+  # The package version to install, e.g. 6.11.0
+  $puppet_agent_version = '',
 ) {
   $master.apply_prep
   $master_fqdn = run_task('facts', $master).first['networking']['fqdn']
-  # TODO: agent version, error checking, comments on how tf this works, result aggregation
+  # TODO: error checking, result aggregation
   $gpg_out = run_task('repo_tasks::install_gpg_key', $targets, gpg_url => $gpg_url)
 
-  $foo = get_targets($targets).map |$n| {
+  $foo = get_targets($gpg_out.ok_set.names).map |$n| {
 
     # Get the facts from facts::bash that we need to build urls for installing repos and packages
     $node_facts = run_task('facts::bash', $n)
@@ -20,19 +24,19 @@ plan install_puppet::provision_agent(
 
     case $os_family {
       'debian': {
-        $repo_url = "deb http://apt.puppetlabs.com $codename puppet"
+        $repo_url = "deb http://apt.puppetlabs.com $codename puppet${puppet_version}"
       }
       'redhat', 'sles', 'suse', 'fedora': {
         case $node_name {
           'fedora': {
-            $repo_url = "http://yum.puppetlabs.com/puppet-release-fedora-${major_version}.noarch.rpm"
+            $repo_url = "http://yum.puppetlabs.com/puppet${puppet_version}-release-fedora-${major_version}.noarch.rpm"
           }
           'sles', 'suse': {
             $extra_args = '-f -g -n puppet'
             $repo_url = 'http://yum.puppetlabs.com/puppet/sles/$releasever_major/$basearch/'
           }
           default: {
-            $repo_url = "http://yum.puppetlabs.com/puppet/puppet-release-el-${major_version}.noarch.rpm"
+            $repo_url = "http://yum.puppetlabs.com/puppet${puppet_version}-release-el-${major_version}.noarch.rpm"
           }
         }
       }
@@ -66,16 +70,53 @@ plan install_puppet::provision_agent(
         $k, repo_url => $val, name => 'puppet', _catch_errors => true)
     }
   }
-  # Run the following tasks concurrently by using the fqdns from $vals.keys
-  run_task('package', $vals.keys, action => 'install', name => 'puppet-agent')
 
-  run_task('puppet_conf', $vals.keys, action => set, section => agent, setting => server, value => $master_fqdn)
+  if ! empty($puppet_agent_version) {
+    $package_out = run_task('package', $vals.keys, action => 'install', name => 'puppet-agent', version => $puppet_agent_version, _catch_errors => true)
+  }
+  else {
+   $package_out = run_task('package', $vals.keys, action => 'install', name => 'puppet-agent')
+  }
+
+  run_task('puppet_conf', $package_out.ok_set.names, action => set, section => agent, setting => server, value => $master_fqdn, _catch_errors => true)
 
   # Get the fqdns of agent from their puppet.conf and turn it into a comma separated string
-  $agent_conf = run_task('puppet_conf', $vals.keys, action => get, section => agent, setting => certname)
+  $agent_conf = run_task('puppet_conf', $package_out.ok_set.names, action => get, section => agent, setting => certname)
   $agent_fqdns = $agent_conf.map |$a| { $a.value['status'] }.join(',')
 
-  run_task('run_agent::run_agent', $vals.keys, retries => 1, _catch_errors => true)
-  run_task('sign_cert::sign_cert', $master, agent_certnames => $agent_fqdns, _catch_errors => true)
-  run_task('run_agent::run_agent', $vals.keys)
+  run_task('run_agent::run_agent', $package_out.ok_set.names, retries => 1, _catch_errors => true)
+  $cert_out = run_task('sign_cert::sign_cert', $master, agent_certnames => $agent_fqdns, _catch_errors => true)
+  $agent_out = run_task('run_agent::run_agent', $package_out.ok_set.names)
+
+  $failure = deep_merge(
+    if ! empty($gpg_out.error_set.names) {
+      { 'failure' => $gpg_out.error_set.map |$result| {
+        { $result.target.name => $result.value }
+        }.reduce |$memo, $value| { $memo + $value }
+      }
+    }
+    else {},
+    if ! empty($package_out.error_set.names) {
+      { 'failure' => $package_out.error_set.map |$result| {
+        { $result.target.name => $result.value }
+        }.reduce |$memo, $value| { $memo + $value }
+      }
+    }
+    else {},
+    if ! empty($cert_out.error_set.names) {
+      { 'failure' => $cert_out.error_set.map |$result| {
+        { $result.target.name => $result.value }
+        }.reduce |$memo, $value| { $memo + $value }
+      }
+    }
+    else {},
+    if ! empty($agent_out.error_set.names) {
+      { 'failure' => $agent_out.error_set.map |$result| {
+        { $result.target.name => $result.value }
+        }.reduce |$memo, $value| { $memo + $value }
+      }
+    }
+    else {}
+  )
+  return deep_merge($failure, { 'success' => $agent_out.ok_set.names })
 }
