@@ -1,7 +1,15 @@
 plan install_puppet::provision_master(
   TargetSpec $master,
   Optional[Boolean] $install_puppetdb = undef,
+  # The major puppet version to install.  An empty string defaults to 'puppet', which is latest
+  $puppet_version = undef,
+  # The puppet-agent package version to install, e.g. 6.11.0
+  $puppet_agent_version = undef,
+  # The puppetserver package version to install, e.g. 6.7.2
+  $puppet_server_version = undef,
+  # server and ca_server entries to use in puppet.conf.  Defaults to the master's fqdn
 ) {
+  #TODO: PuppetDB version
   $gpg_url = 'http://apt.puppetlabs.com/pubkey.gpg'
 
   # Get the facts from facts::bash that we need to build urls for installing repos and packages
@@ -24,8 +32,7 @@ plan install_puppet::provision_master(
           $install_name = 'fedora'
         }
         'sles', 'suse': {
-          $extra_args = '-f -g -n puppet'
-          $repo_url = 'http://yum.puppetlabs.com/puppet/sles/$releasever_major/$basearch/'
+          $repo_url = "http://yum.puppetlabs.com/puppet${puppet_version}/sles/\$releasever_major/\$basearch/"
           $install_name = 'sles'
         }
         default: {
@@ -42,20 +49,21 @@ plan install_puppet::provision_master(
     'repo_tasks::install_gpg_key', $master, gpg_url => $gpg_url
   )
 
-  # TODO: check here in the plan or in the install task?
-  # probably the task
-  #$repo_check = run_task('repo_tasks::query_repo', $master, name => 'puppet').first
-  #if empty($repo_check['repos']) {
-    $repo_result = run_task(
-      'repo_tasks::install_repo', $master, $os_family, repo_url => $repo_url, name => 'puppet'
-    )
-  #}
+  $repo_result = run_task(
+    'repo_tasks::install_repo', $master, $os_family, repo_url => $repo_url, name => 'puppet'
+  )
 
-  # puppetserver and puppet-agent need to be installed in any scenario
-  $package_out = ['puppetserver', 'puppet-agent'].map |$p| {
-    $out = run_task('package', $master, action => 'install', name => $p).first
-    $tmp = { $p => $out.value }
-    $tmp
+  if $puppet_agent_version {
+    run_task('package', $master, action => 'install', name => 'puppet-agent', version => $puppet_agent_version)
+  }
+  else {
+    run_task('package', $master, action => 'install', name => 'puppet-agent')
+  }
+  if $puppet_server_version {
+    run_task('package', $master, action => 'install', name => 'puppetserver', version => $puppet_server_version)
+  }
+  else {
+    run_task('package', $master, action => 'install', name => 'puppetserver')
   }
 
   # Use apply_prep to get the id of the user and fqdn
@@ -68,6 +76,7 @@ plan install_puppet::provision_master(
   )
 
   if $install_puppetdb {
+    $packages = ['puppetserver', 'puppetdb', 'puppet']
     $services = ['puppetserver', 'puppetdb', 'puppet']
 
     # We have to start puppetserver before applying puppetdb classes
@@ -107,6 +116,7 @@ plan install_puppet::provision_master(
 
   }
   else {
+    $packages = ['puppetserver', 'puppet']
     $services = ['puppetserver', 'puppet']
   }
 
@@ -114,6 +124,12 @@ plan install_puppet::provision_master(
     run_task('service::linux', $master, action => 'start', name => $s)
   }
   run_task('run_agent::run_agent', $master)
+
+  $package_out = ['puppetserver', 'puppet-agent'].map |$p| {
+    $out = run_task('package', $master, action => 'status', name => $p).first
+    $tmp = { $p => $out.value }
+    $tmp
+  }
 
   $service_out = $services.map |$s| {
     $out = run_task('service::linux', $master, action => 'status', name => $s).first
