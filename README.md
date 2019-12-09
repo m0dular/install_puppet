@@ -29,28 +29,56 @@ bolt puppetfile install
 ## Usage
 
 ```
-bolt plan run install_puppet::provision_master master=<value> [install_puppetdb=<value>]
+bolt plan run install_puppet::provision_master master=<value> [install_puppetdb=<value>] [puppet_version=<value>] [puppet_agent_version=<value>] [puppet_server_version=<value>]
 
 PARAMETERS:
 - master: TargetSpec
-- install_puppetdb: Optional[String]
+- install_puppetdb: Optional[Boolean]
+    Default: undef
+- puppet_version: Any
+    Default: undef
+- puppet_agent_version: Any
+    Default: undef
+- puppet_server_version: Any
+    Default: undef
 ```
 
 ```
-bolt plan run install_puppet::provision_agent master=<value> targets=<value> [gpg_url=<value>]
+bolt plan run install_puppet::provision_agent master=<value> targets=<value> [gpg_url=<value>] [puppet_version=<value>] [puppet_agent_version=<value>] [server=<value>] [ca_server=<value>]
 
 PARAMETERS:
 - master: TargetSpec
 - targets: TargetSpec
 - gpg_url: Any
+    Default: 'http://apt.puppetlabs.com/pubkey.gpg'
+- puppet_version: Any
+    Default: undef
+- puppet_agent_version: Any
+    Default: undef
+- server: Any
+    Default: undef
+- ca_server: Any
+    Default: undef
 ```
 
 ```
-bolt plan run install_puppet::provision_compiler master=<value> compiler=<value> [ssldir=<value>]
+bolt plan run install_puppet::provision_compiler master=<value> compiler=<value> [ssldir=<value>] [gpg_url=<value>] [puppet_version=<value>] [puppet_agent_version=<value>] [puppet_server_version=<value>] [server=<value>] [ca_server=<value>]
 
 PARAMETERS:
 - master: TargetSpec
 - compiler: TargetSpec
 - ssldir: Any
     Default: '/etc/puppetlabs/puppet/ssl'
+- gpg_url: Any
+    Default: 'http://apt.puppetlabs.com/pubkey.gpg'
+- puppet_version: Any
+    Default: undef
+- puppet_agent_version: Any
+    Default: undef
+- puppet_server_version: Any
+    Default: undef
+- server: Any
+    Default: undef
+- ca_server: Any
+    Default: undef
 ```
