@@ -34,7 +34,7 @@ bolt plan run install_puppet::provision_master master=<value> [install_puppetdb=
 PARAMETERS:
 - master: TargetSpec
 - install_puppetdb: Optional[Boolean]
-    Default: undef
+    Default: true
 - puppet_version: Any
     Default: undef
 - puppet_agent_version: Any

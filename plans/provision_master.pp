@@ -1,6 +1,6 @@
 plan install_puppet::provision_master(
   TargetSpec $master,
-  Optional[Boolean] $install_puppetdb = undef,
+  Optional[Boolean] $install_puppetdb = true,
   # The major puppet version to install.  An empty string defaults to 'puppet', which is latest
   $puppet_version = undef,
   # The puppet-agent package version to install, e.g. 6.11.0
