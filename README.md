@@ -12,7 +12,7 @@ cd !$
 ```
 
 ```
-cat <<EOF >Puppetfile
+cat <<EOF >>Puppetfile
 mod 'm0dular-run_agent', '0.1.2'
 mod 'puppetlabs-stdlib'
 mod 'repo_tasks',
