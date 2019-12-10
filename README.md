@@ -14,6 +14,8 @@ cd !$
 ```
 cat <<EOF >>Puppetfile
 mod 'm0dular-run_agent', '0.1.2'
+mod 'm0dular-sign_cert', '0.1.1'
+mod 'puppetlabs-puppet_conf', '0.3.1'
 mod 'puppetlabs-stdlib'
 mod 'repo_tasks',
   :git => 'https://github.com/m0dular/repo_tasks.git'
