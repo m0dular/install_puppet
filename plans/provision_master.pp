@@ -17,27 +17,22 @@ plan install_puppet::provision_master(
   $os_family = $master_facts.first.value['os']['family']
   $master_name = $master_facts.first.value['os']['name']
   $major_version = $master_facts.first.value['os']['release']['major']
+  $codename = $master_facts.first.value['os']['distro']['codename']
 
   case $os_family {
     'debian': {
-      $codename = $master_facts.first.value['os']['distro']['codename']
-      $repo_url = "deb http://apt.puppetlabs.com $codename puppet"
+      $repo_url = "deb http://apt.puppetlabs.com $codename puppet${puppet_version}"
     }
     'redhat', 'sles', 'suse', 'fedora': {
       case $master_name {
         'fedora': {
-          #TODO
-          $extra_args = '-f -g -n puppet'
-          $repo_url = 'http://yum.puppetlabs.com/puppet/sles/$releasever_major/$basearch/'
-          $install_name = 'fedora'
+          $repo_url = "http://yum.puppetlabs.com/puppet${puppet_version}-release-fedora-${major_version}.noarch.rpm"
         }
         'sles', 'suse': {
           $repo_url = "http://yum.puppetlabs.com/puppet${puppet_version}/sles/\$releasever_major/\$basearch/"
-          $install_name = 'sles'
         }
         default: {
-          $install_name = 'el'
-          $repo_url = "http://yum.puppetlabs.com/puppet/puppet-release-${install_name}-${major_version}.noarch.rpm"
+          $repo_url = "http://yum.puppetlabs.com/puppet${puppet_version}-release-el-${major_version}.noarch.rpm"
         }
       }
 

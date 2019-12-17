@@ -30,6 +30,7 @@ plan install_puppet::provision_compiler(
   $os_family = $compiler_facts.first.value['os']['family']
   $compiler_name = $compiler_facts.first.value['os']['name']
   $major_version = $compiler_facts.first.value['os']['release']['major']
+  $codename = $compiler_facts.first.value['os']['distro']['codename']
 
   case $os_family {
     'debian': {
