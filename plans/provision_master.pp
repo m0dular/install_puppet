@@ -86,11 +86,7 @@ plan install_puppet::provision_master(
     run_command('/opt/puppetlabs/bin/puppet module install puppetlabs-puppetdb', $master, _run_as                    => 'root')
 
     run_command('/opt/puppetlabs/bin/puppet apply -e "class{ \'puppetdb\':}"', $master, _run_as                             => 'root')
-    run_command('/opt/puppetlabs/bin/puppet apply -e "class{ \'puppetdb::master::config\':}"', $master, _run_as                             => 'root')
-
-    # Configure the master to store reports in PuppetDB and to submit them in its own agent runs
-    run_task('puppet_conf', $master, action => set, section => master, setting => reports, value => 'puppetdb')
-    run_task('puppet_conf', $master, action => set, section => agent, setting => report, value => 'true')
+    run_command('/opt/puppetlabs/bin/puppet apply -e "class{ \'puppetdb::master::config\': enable_reports => true, manage_report_processor => true}"', $master, _run_as                             => 'root')
 
     # Populate puppetdb.conf with the auth needed to use 'puppet query'
     apply($master) {
